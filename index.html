@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Match-3</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a1a;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #fff;
+    overflow-x: hidden;
+  }
+
+  /* ── MENU ── */
+  #menu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: 40px;
+  }
+
+  #menu h1 {
+    font-size: 48px;
+    background: linear-gradient(135deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 3px;
+  }
+
+  .mode-cards {
+    display: flex;
+    gap: 28px;
+  }
+
+  .mode-card {
+    width: 320px;
+    background: rgba(255,255,255,0.04);
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 32px 28px;
+    cursor: pointer;
+    transition: all 0.25s;
+    text-align: center;
+  }
+
+  .mode-card:hover {
+    border-color: rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.08);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  }
+
+  .mode-card .icon { font-size: 52px; margin-bottom: 16px; }
+  .mode-card h2 { font-size: 22px; margin-bottom: 8px; }
+  .mode-card p { font-size: 14px; color: #888; line-height: 1.5; }
+  .mode-card .tags { margin-top: 14px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .mode-card .tag {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.07);
+    color: #aaa;
+  }
+
+  /* ── GAME ── */
+  #game { display: none; flex-direction: column; align-items: center; }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+    padding: 16px 24px;
+    margin-top: 12px;
+  }
+
+  header h1 {
+    font-size: 28px;
+    background: linear-gradient(135deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 2px;
+  }
+
+  .stats { display: flex; gap: 24px; font-size: 16px; }
+
+  .stats span {
+    background: rgba(255,255,255,0.08);
+    padding: 6px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .stats .label { color: #888; font-size: 12px; }
+  .stats .value { color: #fff; font-weight: 700; font-size: 18px; }
+
+  #board-wrap { position: relative; margin: 8px auto 20px; }
+
+  #board {
+    display: grid;
+    grid-template-columns: repeat(20, 1fr);
+    grid-template-rows: repeat(20, 1fr);
+    gap: 1px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 12px;
+    border: 2px solid rgba(255,255,255,0.08);
+    padding: 4px;
+    user-select: none;
+  }
+
+  .cell {
+    width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; border-radius: 6px; cursor: pointer;
+    transition: transform 0.12s, background 0.15s, opacity 0.25s;
+    position: relative;
+  }
+
+  .cell.empty {
+    cursor: default; pointer-events: none;
+    background: rgba(255,255,255,0.02); opacity: 1;
+  }
+
+  .cell.money {
+    pointer-events: none;
+    cursor: default;
+    filter: saturate(0.6) brightness(0.9);
+    opacity: 0.7;
+  }
+
+  .cell.goal {
+    background: rgba(255,215,0,0.15);
+    box-shadow: inset 0 0 12px rgba(255,215,0,0.3);
+    animation: goalPulse 2s ease-in-out infinite;
+    pointer-events: none; cursor: default;
+  }
+
+  .cell.player { pointer-events: none; cursor: default; z-index: 5; }
+
+  @keyframes goalPulse {
+    0%, 100% { box-shadow: inset 0 0 12px rgba(255,215,0,0.2); }
+    50%      { box-shadow: inset 0 0 20px rgba(255,215,0,0.5); }
+  }
+
+  .cell:hover { background: rgba(255,255,255,0.1); transform: scale(1.12); z-index: 2; }
+
+  .cell.selected {
+    background: rgba(255,255,255,0.2); transform: scale(1.18);
+    box-shadow: 0 0 12px rgba(255,255,255,0.3); z-index: 3;
+  }
+
+  .cell.matched  { animation: pop 0.35s ease-out forwards; }
+  .cell.falling   { animation: drop 0.3s ease-in; }
+  .cell.spawning  { animation: spawn 0.3s ease-out; }
+  .cell.hint      { animation: pulse 0.8s ease-in-out infinite; }
+
+  .cell.chain-glow {
+    animation: chainGlow 0.5s ease-in-out forwards;
+  }
+
+  .cell.chain-pop {
+    animation: chainPop 0.4s ease-out forwards;
+  }
+
+  @keyframes pop {
+    0%   { transform: scale(1); opacity: 1; }
+    50%  { transform: scale(1.5); opacity: 0.6; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+
+  @keyframes drop {
+    0%   { transform: translateY(-38px); opacity: 0.5; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+
+  @keyframes spawn {
+    0%   { transform: scale(0) rotate(180deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.25); filter: brightness(1.4); }
+  }
+
+  @keyframes chainGlow {
+    0%   { filter: brightness(1); box-shadow: none; }
+    50%  { filter: brightness(2.5); box-shadow: 0 0 16px rgba(255,255,255,0.6); transform: scale(1.2); }
+    100% { filter: brightness(2); box-shadow: 0 0 12px rgba(255,200,50,0.5); transform: scale(1.15); }
+  }
+
+  @keyframes chainPop {
+    0%   { transform: scale(1.15); opacity: 1; filter: brightness(2); }
+    40%  { transform: scale(1.6); opacity: 0.7; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+
+  .combo-text {
+    position: absolute; pointer-events: none;
+    font-size: 20px; font-weight: 900;
+    color: #ffd93d; text-shadow: 0 0 10px rgba(255,217,61,0.7);
+    animation: comboFloat 1s ease-out forwards; z-index: 10;
+  }
+
+  @keyframes comboFloat {
+    0%   { transform: translateY(0) scale(1); opacity: 1; }
+    100% { transform: translateY(-60px) scale(1.5); opacity: 0; }
+  }
+
+  .end-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    border-radius: 12px; z-index: 20;
+    animation: fadeIn 0.5s ease-out;
+  }
+
+  .end-overlay h2 { font-size: 42px; margin-bottom: 8px; }
+  .end-overlay p { font-size: 18px; color: #aaa; margin-bottom: 16px; }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .controls { display: flex; gap: 12px; margin-bottom: 12px; }
+
+  .info-bar {
+    display: flex; gap: 8px; align-items: center;
+    margin-bottom: 16px; font-size: 13px; color: #666;
+  }
+
+  .info-bar kbd {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px; padding: 2px 8px; font-size: 12px; color: #aaa;
+  }
+
+  button {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #fff; padding: 8px 20px; border-radius: 8px;
+    cursor: pointer; font-size: 14px; transition: background 0.2s;
+  }
+
+  button:hover { background: rgba(255,255,255,0.15); }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 6px 14px;
+    justify-content: center; max-width: 820px;
+    margin-bottom: 16px; font-size: 13px; color: #777;
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+
+  .remaining-bar {
+    display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;
+    max-width: 820px; margin-bottom: 10px; font-size: 13px; color: #666;
+  }
+  .remaining-bar .ri { opacity: 0.8; }
+  .remaining-bar .ri.gone { opacity: 0.2; text-decoration: line-through; }
+</style>
+</head>
+<body>
+
+<!-- ═══ MENU ═══ -->
+<div id="menu">
+  <h1>MATCH 3</h1>
+  <div class="mode-cards">
+    <div class="mode-card" onclick="startGame('path')">
+      <div class="icon">🐱</div>
+      <h2>Path Puzzle</h2>
+      <p>Clear tiles to carve a path. Guide the cat from bottom-right to the flag at top-left.</p>
+      <div class="tags">
+        <span class="tag">6 tile types</span>
+        <span class="tag">no gravity</span>
+        <span class="tag">no regen</span>
+        <span class="tag">WASD movement</span>
+      </div>
+    </div>
+    <div class="mode-card" onclick="startGame('chain')">
+      <div class="icon">💥</div>
+      <h2>Chain Reaction</h2>
+      <p>Match any 3 to wipe out ALL tiles of that type. Cleared tiles leave 💰 behind. Clear all colored tiles to win!</p>
+      <div class="tags">
+        <span class="tag">15 tile types</span>
+        <span class="tag">gravity</span>
+        <span class="tag">no regen</span>
+        <span class="tag">chain clear</span>
+        <span class="tag">💰 blockers</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ GAME ═══ -->
+<div id="game">
+  <header>
+    <h1 id="mode-title">MATCH 3</h1>
+    <div class="stats">
+      <span><div class="label">SCORE</div><div class="value" id="score">0</div></span>
+      <span><div class="label">MOVES</div><div class="value" id="moves">0</div></span>
+      <span><div class="label">COMBO</div><div class="value" id="combo">0x</div></span>
+      <span id="stat-extra"><div class="label" id="extra-label">STEPS</div><div class="value" id="extra-value">0</div></span>
+    </div>
+  </header>
+
+  <div id="board-wrap">
+    <div id="board"></div>
+  </div>
+
+  <div class="controls">
+    <button onclick="backToMenu()">< Menu</button>
+    <button onclick="game.reset()">🔄 New Game</button>
+    <button onclick="game.showHint()">💡 Hint</button>
+    <button onclick="game.shuffle()">🔀 Shuffle</button>
+  </div>
+
+  <div class="info-bar" id="info-bar"></div>
+  <div class="remaining-bar" id="remaining-bar"></div>
+  <div class="legend" id="legend"></div>
+</div>
+
+<script>
+const COLS = 20, ROWS = 20;
+const PLAYER = '🐱', GOAL_MARKER = '🏁';
+
+const PATH_ITEMS = [
+  { emoji: '🔴', name: 'Red' },
+  { emoji: '🔵', name: 'Blue' },
+  { emoji: '🟢', name: 'Green' },
+  { emoji: '🟡', name: 'Yellow' },
+  { emoji: '🟣', name: 'Purple' },
+  { emoji: '🟠', name: 'Orange' },
+];
+
+const CHAIN_ITEMS = [
+  { emoji: '🔴', name: 'Red' },
+  { emoji: '🔵', name: 'Blue' },
+  { emoji: '🟢', name: 'Green' },
+  { emoji: '🟡', name: 'Yellow' },
+  { emoji: '🟣', name: 'Purple' },
+  { emoji: '🟠', name: 'Orange' },
+  { emoji: '⚪', name: 'White' },
+  { emoji: '🟤', name: 'Brown' },
+  { emoji: '💎', name: 'Diamond' },
+  { emoji: '⭐', name: 'Star' },
+  { emoji: '🔥', name: 'Fire' },
+  { emoji: '💚', name: 'Emerald' },
+  { emoji: '🩷', name: 'Pink' },
+  { emoji: '🩵', name: 'Ice' },
+  { emoji: '🖤', name: 'Onyx' },
+];
+
+let game = null;
+
+function startGame(mode) {
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('game').style.display = 'flex';
+  game = new Match3(mode);
+}
+
+function backToMenu() {
+  document.getElementById('menu').style.display = 'flex';
+  document.getElementById('game').style.display = 'none';
+  if (game) { game.destroy(); game = null; }
+}
+
+class Match3 {
+  constructor(mode) {
+    this.mode = mode;
+    this.items = mode === 'chain' ? CHAIN_ITEMS : PATH_ITEMS;
+    this.numTypes = this.items.length;
+    this.boardEl = document.getElementById('board');
+    this.scoreEl = document.getElementById('score');
+    this.movesEl = document.getElementById('moves');
+    this.comboEl = document.getElementById('combo');
+    this.wrapEl = document.getElementById('board-wrap');
+    this.grid = [];
+    this.cells = [];
+    this.selected = null;
+    this.locked = false;
+    this.score = 0;
+    this.moves = 0;
+    this.comboCount = 0;
+    this.ended = false;
+
+    // mode-specific
+    if (mode === 'path') {
+      this.steps = 0;
+      this.playerR = ROWS - 1;
+      this.playerC = COLS - 1;
+      this.goalR = 0;
+      this.goalC = 0;
+      document.getElementById('mode-title').textContent = 'PATH PUZZLE';
+      document.getElementById('extra-label').textContent = 'STEPS';
+      document.getElementById('extra-value').textContent = '0';
+      document.getElementById('stat-extra').style.display = '';
+      document.getElementById('info-bar').innerHTML =
+        'Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd>' +
+        '&nbsp;|&nbsp; 🏠 bottom-right &nbsp;→&nbsp; 🏁 top-left';
+      document.getElementById('remaining-bar').innerHTML = '';
+    } else {
+      document.getElementById('mode-title').textContent = 'CHAIN REACTION';
+      document.getElementById('extra-label').textContent = 'LEFT';
+      document.getElementById('extra-value').textContent = '400';
+      document.getElementById('stat-extra').style.display = '';
+      document.getElementById('info-bar').innerHTML =
+        'Match 3 of a type → ALL of that type are wiped! Cleared tiles leave 💰 behind.';
+    }
+
+    this.buildLegend();
+    this._keyHandler = (e) => this.onKey(e);
+    document.addEventListener('keydown', this._keyHandler);
+    this.reset();
+  }
+
+  destroy() {
+    document.removeEventListener('keydown', this._keyHandler);
+  }
+
+  buildLegend() {
+    document.getElementById('legend').innerHTML =
+      this.items.map(it => `<div class="legend-item">${it.emoji} ${it.name}</div>`).join('');
+  }
+
+  onKey(e) {
+    if (this.mode !== 'path') return;
+    if (this.ended || this.locked) return;
+    let dr = 0, dc = 0;
+    switch (e.key) {
+      case 'ArrowUp':    case 'w': case 'W': dr = -1; break;
+      case 'ArrowDown':  case 's': case 'S': dr =  1; break;
+      case 'ArrowLeft':  case 'a': case 'A': dc = -1; break;
+      case 'ArrowRight': case 'd': case 'D': dc =  1; break;
+      default: return;
+    }
+    e.preventDefault();
+    this.movePlayer(dr, dc);
+  }
+
+  /* ── PATH MODE: player movement ── */
+  movePlayer(dr, dc) {
+    const nr = this.playerR + dr, nc = this.playerC + dc;
+    if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return;
+    if (this.grid[nr][nc] !== null) return;
+    this.cells[this.playerR][this.playerC].textContent = '';
+    this.cells[this.playerR][this.playerC].className = 'cell empty';
+    this.playerR = nr; this.playerC = nc;
+    this.steps++;
+    this.renderPlayer();
+    this.updateUI();
+    if (this.playerR === this.goalR && this.playerC === this.goalC) this.endGame(true);
+  }
+
+  renderPlayer() {
+    const c = this.cells[this.playerR][this.playerC];
+    c.textContent = PLAYER; c.className = 'cell player';
+  }
+
+  renderGoal() {
+    if (this.playerR === this.goalR && this.playerC === this.goalC) return;
+    const c = this.cells[this.goalR][this.goalC];
+    if (this.grid[this.goalR][this.goalC] === null) {
+      c.textContent = GOAL_MARKER; c.className = 'cell goal';
+    }
+  }
+
+  /* ── CHAIN MODE: remaining types bar ── */
+  updateRemainingBar() {
+    if (this.mode !== 'chain') return;
+    const counts = new Array(this.numTypes).fill(0);
+    let moneyCount = 0;
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++) {
+        if (this.grid[r][c] === '$') moneyCount++;
+        else if (this.isPlayable(this.grid[r][c])) counts[this.grid[r][c]]++;
+      }
+    let total = 0;
+    const parts = this.items.map((it, i) => {
+      total += counts[i];
+      return `<span class="ri${counts[i] === 0 ? ' gone' : ''}">${it.emoji}${counts[i]}</span>`;
+    });
+    parts.push(`<span class="ri">💰${moneyCount}</span>`);
+    document.getElementById('remaining-bar').innerHTML = parts.join(' ');
+    document.getElementById('extra-value').textContent = total;
+    return total;
+  }
+
+  /* ── SHARED ── */
+  endGame(won) {
+    this.ended = true;
+    const ov = document.createElement('div');
+    ov.className = 'end-overlay';
+    if (won) {
+      const detail = this.mode === 'path'
+        ? `Score: ${this.score.toLocaleString()} | Moves: ${this.moves} | Steps: ${this.steps}`
+        : `Score: ${this.score.toLocaleString()} | Moves: ${this.moves}`;
+      ov.innerHTML = `<h2>🎉 YOU WIN! 🎉</h2><p>${detail}</p>
+        <button onclick="game.reset(); this.parentElement.remove()">🔄 Play Again</button>`;
+    } else {
+      ov.innerHTML = `<h2>NO MOVES LEFT</h2><p>Score: ${this.score.toLocaleString()} | Moves: ${this.moves}</p>
+        <button onclick="game.reset(); this.parentElement.remove()">🔄 Try Again</button>`;
+    }
+    this.wrapEl.appendChild(ov);
+  }
+
+  reset() {
+    this.score = 0; this.moves = 0; this.comboCount = 0;
+    this.selected = null; this.locked = false; this.ended = false;
+    if (this.mode === 'path') { this.steps = 0; this.playerR = ROWS - 1; this.playerC = COLS - 1; }
+    const ov = this.wrapEl.querySelector('.end-overlay');
+    if (ov) ov.remove();
+
+    this.grid = [];
+    for (let r = 0; r < ROWS; r++) {
+      this.grid[r] = [];
+      for (let c = 0; c < COLS; c++) this.grid[r][c] = this.randomType(r, c);
+    }
+    while (this.findMatches().length > 0) {
+      for (const m of this.findMatches())
+        for (const [r, c] of m) this.grid[r][c] = this.randomType(r, c);
+    }
+
+    if (this.mode === 'path') {
+      this.grid[ROWS - 1][COLS - 1] = null;
+      this.grid[0][0] = null;
+    }
+
+    this.render();
+    if (this.mode === 'path') { this.renderPlayer(); this.renderGoal(); }
+    this.updateUI();
+    if (this.mode === 'chain') this.updateRemainingBar();
+  }
+
+  randomType(r, c) {
+    const avoid = new Set();
+    if (r >= 2 && this.grid[r-1]?.[c] === this.grid[r-2]?.[c]) avoid.add(this.grid[r-1][c]);
+    if (c >= 2 && this.grid[r][c-1] === this.grid[r][c-2]) avoid.add(this.grid[r][c-1]);
+    let t;
+    do { t = Math.floor(Math.random() * this.numTypes); } while (avoid.has(t));
+    return t;
+  }
+
+  isPlayable(v) { return v !== null && v !== '$'; }
+
+  render() {
+    this.boardEl.innerHTML = '';
+    this.cells = [];
+    for (let r = 0; r < ROWS; r++) {
+      this.cells[r] = [];
+      for (let c = 0; c < COLS; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const v = this.grid[r][c];
+        if (v === '$') {
+          cell.textContent = '💰'; cell.classList.add('money');
+        } else if (v !== null) {
+          cell.textContent = this.items[v].emoji;
+        } else {
+          cell.textContent = ''; cell.classList.add('empty');
+        }
+        cell.addEventListener('click', () => this.onClick(r, c));
+        this.boardEl.appendChild(cell);
+        this.cells[r][c] = cell;
+      }
+    }
+  }
+
+  updateCell(r, c) {
+    const v = this.grid[r][c];
+    this.cells[r][c].className = 'cell';
+    if (v === '$') {
+      this.cells[r][c].textContent = '💰'; this.cells[r][c].classList.add('money');
+    } else if (v !== null) {
+      this.cells[r][c].textContent = this.items[v].emoji;
+    } else {
+      this.cells[r][c].textContent = ''; this.cells[r][c].classList.add('empty');
+    }
+  }
+
+  onClick(r, c) {
+    if (this.locked || this.ended) return;
+    if (!this.isPlayable(this.grid[r][c])) return;
+    if (this.selected) {
+      const [sr, sc] = this.selected;
+      this.clearHints();
+      if (sr === r && sc === c) {
+        this.cells[sr][sc].classList.remove('selected');
+        this.selected = null; return;
+      }
+      if (Math.abs(sr - r) + Math.abs(sc - c) === 1 && this.isPlayable(this.grid[r][c]) && this.isPlayable(this.grid[sr][sc])) {
+        this.cells[sr][sc].classList.remove('selected');
+        this.selected = null;
+        this.trySwap(sr, sc, r, c);
+      } else {
+        this.cells[sr][sc].classList.remove('selected');
+        this.selected = [r, c];
+        this.cells[r][c].classList.add('selected');
+      }
+    } else {
+      this.selected = [r, c];
+      this.cells[r][c].classList.add('selected');
+    }
+  }
+
+  async trySwap(r1, c1, r2, c2) {
+    this.locked = true;
+    this.swap(r1, c1, r2, c2);
+    this.updateCell(r1, c1); this.updateCell(r2, c2);
+
+    const matches = this.findMatches();
+    if (matches.length === 0) {
+      await this.delay(200);
+      this.swap(r1, c1, r2, c2);
+      this.updateCell(r1, c1); this.updateCell(r2, c2);
+      this.locked = false; return;
+    }
+
+    this.moves++;
+    this.comboCount = 0;
+    await this.processMatches();
+    this.locked = false;
+
+    // check end conditions
+    if (this.mode === 'chain') {
+      const left = this.updateRemainingBar();
+      if (left === 0) { this.endGame(true); return; }
+    }
+    if (!this.hasPossibleMoves()) {
+      await this.delay(400);
+      this.endGame(false);
+    }
+  }
+
+  swap(r1, c1, r2, c2) {
+    const t = this.grid[r1][c1];
+    this.grid[r1][c1] = this.grid[r2][c2];
+    this.grid[r2][c2] = t;
+  }
+
+  findMatches() {
+    const matched = new Set(), groups = [];
+
+    for (let r = 0; r < ROWS; r++) {
+      let run = 1;
+      for (let c = 1; c <= COLS; c++) {
+        if (c < COLS && this.isPlayable(this.grid[r][c]) && this.isPlayable(this.grid[r][c-1]) && this.grid[r][c] === this.grid[r][c-1]) {
+          run++;
+        } else {
+          if (run >= 3 && this.isPlayable(this.grid[r][c-1])) {
+            const g = [];
+            for (let k = c - run; k < c; k++) { matched.add(`${r},${k}`); g.push([r, k]); }
+            groups.push(g);
+          }
+          run = 1;
+        }
+      }
+    }
+    for (let c = 0; c < COLS; c++) {
+      let run = 1;
+      for (let r = 1; r <= ROWS; r++) {
+        if (r < ROWS && this.isPlayable(this.grid[r][c]) && this.isPlayable(this.grid[r-1][c]) && this.grid[r][c] === this.grid[r-1][c]) {
+          run++;
+        } else {
+          if (run >= 3 && this.isPlayable(this.grid[r-1][c])) {
+            const g = [];
+            for (let k = r - run; k < r; k++) { if (!matched.has(`${k},${c}`)) g.push([k, c]); matched.add(`${k},${c}`); }
+            if (g.length) groups.push(g);
+          }
+          run = 1;
+        }
+      }
+    }
+    return groups;
+  }
+
+  async processMatches() {
+    let matches = this.findMatches();
+    while (matches.length > 0) {
+      this.comboCount++;
+
+      const allMatched = new Set();
+      for (const g of matches)
+        for (const [r, c] of g) allMatched.add(`${r},${c}`);
+
+      // ── CHAIN MODE: find all types that were matched, then collect ALL of those types ──
+      let chainExtra = new Set();
+      if (this.mode === 'chain') {
+        const matchedTypes = new Set();
+        for (const key of allMatched) {
+          const [r, c] = key.split(',').map(Number);
+          matchedTypes.add(this.grid[r][c]);
+        }
+        // find every cell of those types (skip $ and null)
+        for (let r = 0; r < ROWS; r++)
+          for (let c = 0; c < COLS; c++)
+            if (this.isPlayable(this.grid[r][c]) && matchedTypes.has(this.grid[r][c]) && !allMatched.has(`${r},${c}`))
+              chainExtra.add(`${r},${c}`);
+      }
+
+      const totalCleared = allMatched.size + chainExtra.size;
+      const pts = totalCleared * 10 * this.comboCount;
+      this.score += pts;
+
+      // 1) animate the direct match
+      for (const key of allMatched) {
+        const [r, c] = key.split(',').map(Number);
+        this.cells[r][c].classList.add('matched');
+      }
+
+      if (this.comboCount > 1) this.showCombo(pts, this.comboCount);
+
+      await this.delay(350);
+
+      // 2) chain glow on extras
+      if (chainExtra.size > 0) {
+        for (const key of chainExtra) {
+          const [r, c] = key.split(',').map(Number);
+          this.cells[r][c].classList.add('chain-glow');
+        }
+        this.showCombo(0, 0, `💥 ${chainExtra.size + allMatched.size} WIPED!`);
+        await this.delay(500);
+
+        // 3) chain pop
+        for (const key of chainExtra) {
+          const [r, c] = key.split(',').map(Number);
+          this.cells[r][c].classList.remove('chain-glow');
+          this.cells[r][c].classList.add('chain-pop');
+        }
+        await this.delay(400);
+      }
+
+      // clear matched from grid
+      for (const key of allMatched) {
+        const [r, c] = key.split(',').map(Number);
+        this.grid[r][c] = null;
+      }
+      for (const key of chainExtra) {
+        const [r, c] = key.split(',').map(Number);
+        this.grid[r][c] = null;
+      }
+
+      // gravity (chain mode) — tiles fall first, then $ fills from top
+      if (this.mode === 'chain') {
+        for (let c = 0; c < COLS; c++) {
+          // pull all non-null (tiles + existing $) down
+          let wr = ROWS - 1;
+          for (let r = ROWS - 1; r >= 0; r--) {
+            if (this.grid[r][c] !== null) { this.grid[wr][c] = this.grid[r][c]; wr--; }
+          }
+          // fill empty top slots with $
+          for (let r = wr; r >= 0; r--) this.grid[r][c] = '$';
+        }
+      }
+
+      // re-render
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (this.mode === 'path' && r === this.playerR && c === this.playerC) continue;
+          const v = this.grid[r][c];
+          this.cells[r][c].className = 'cell';
+          if (v === '$') {
+            this.cells[r][c].textContent = '💰';
+            this.cells[r][c].classList.add('money');
+            if (this.mode === 'chain') this.cells[r][c].classList.add('falling');
+          } else if (v !== null) {
+            this.cells[r][c].textContent = this.items[v].emoji;
+            if (this.mode === 'chain') this.cells[r][c].classList.add('falling');
+          } else {
+            this.cells[r][c].textContent = '';
+            this.cells[r][c].classList.add('empty');
+          }
+        }
+      }
+
+      if (this.mode === 'path') this.renderGoal();
+      if (this.mode === 'chain') this.updateRemainingBar();
+
+      this.updateUI();
+      await this.delay(300);
+
+      matches = this.findMatches();
+    }
+  }
+
+  showCombo(pts, combo, msg) {
+    const el = document.createElement('div');
+    el.className = 'combo-text';
+    el.textContent = msg || `${combo}x COMBO! +${pts}`;
+    el.style.left = '50%'; el.style.top = '50%';
+    el.style.transform = 'translate(-50%, -50%)';
+    this.wrapEl.appendChild(el);
+    setTimeout(() => el.remove(), 1000);
+  }
+
+  hasPossibleMoves() {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (!this.isPlayable(this.grid[r][c])) continue;
+        if (c < COLS - 1 && this.isPlayable(this.grid[r][c+1])) {
+          this.swap(r, c, r, c + 1);
+          if (this.findMatches().length > 0) { this.swap(r, c, r, c + 1); return true; }
+          this.swap(r, c, r, c + 1);
+        }
+        if (r < ROWS - 1 && this.isPlayable(this.grid[r+1][c])) {
+          this.swap(r, c, r + 1, c);
+          if (this.findMatches().length > 0) { this.swap(r, c, r + 1, c); return true; }
+          this.swap(r, c, r + 1, c);
+        }
+      }
+    }
+    return false;
+  }
+
+  showHint() {
+    if (this.locked || this.ended) return;
+    this.clearHints();
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (!this.isPlayable(this.grid[r][c])) continue;
+        if (c < COLS - 1 && this.isPlayable(this.grid[r][c+1])) {
+          this.swap(r, c, r, c + 1);
+          if (this.findMatches().length > 0) {
+            this.swap(r, c, r, c + 1);
+            this.cells[r][c].classList.add('hint');
+            this.cells[r][c + 1].classList.add('hint');
+            return;
+          }
+          this.swap(r, c, r, c + 1);
+        }
+        if (r < ROWS - 1 && this.isPlayable(this.grid[r+1][c])) {
+          this.swap(r, c, r + 1, c);
+          if (this.findMatches().length > 0) {
+            this.swap(r, c, r + 1, c);
+            this.cells[r][c].classList.add('hint');
+            this.cells[r + 1][c].classList.add('hint');
+            return;
+          }
+          this.swap(r, c, r + 1, c);
+        }
+      }
+    }
+  }
+
+  clearHints() {
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++)
+        this.cells[r][c].classList.remove('hint');
+  }
+
+  shuffle() {
+    if (this.ended) return;
+    const tiles = [], positions = [];
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++)
+        if (this.isPlayable(this.grid[r][c])) { tiles.push(this.grid[r][c]); positions.push([r, c]); }
+
+    for (let i = tiles.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+    }
+    for (let i = 0; i < positions.length; i++) {
+      const [r, c] = positions[i]; this.grid[r][c] = tiles[i];
+    }
+
+    this.render();
+    if (this.mode === 'path') { this.renderPlayer(); this.renderGoal(); }
+
+    setTimeout(async () => {
+      this.locked = true;
+      await this.processMatches();
+      this.locked = false;
+      if (this.mode === 'chain') {
+        const left = this.updateRemainingBar();
+        if (left === 0) { this.endGame(true); return; }
+      }
+      if (!this.hasPossibleMoves()) this.shuffle();
+    }, 100);
+  }
+
+  updateUI() {
+    this.scoreEl.textContent = this.score.toLocaleString();
+    this.movesEl.textContent = this.moves;
+    this.comboEl.textContent = this.comboCount > 0 ? `${this.comboCount}x` : '0x';
+    if (this.mode === 'path') {
+      document.getElementById('extra-value').textContent = this.steps;
+    }
+  }
+
+  delay(ms) { return new Promise(res => setTimeout(res, ms)); }
+}
+</script>
+</body>
+</html>
