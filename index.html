@@ -62,7 +62,23 @@
   .mode-card .icon { font-size: 52px; margin-bottom: 16px; }
   .mode-card h2 { font-size: 22px; margin-bottom: 8px; }
   .mode-card p { font-size: 14px; color: #888; line-height: 1.5; }
-  .mode-card .tags { margin-top: 14px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .tile-picker {
+    display: flex; align-items: center; gap: 10px;
+    justify-content: center; margin: 14px 0 6px;
+  }
+
+  .tile-picker label { font-size: 13px; color: #999; }
+
+  .tile-picker input[type="range"] {
+    width: 120px; accent-color: #4d96ff; cursor: pointer;
+  }
+
+  .tile-count {
+    font-size: 20px; font-weight: 800; color: #fff;
+    min-width: 28px; text-align: center;
+  }
+
+  .mode-card .tags { margin-top: 10px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
   .mode-card .tag {
     font-size: 11px;
     padding: 3px 10px;
@@ -273,23 +289,31 @@
 <div id="menu">
   <h1>MATCH 3</h1>
   <div class="mode-cards">
-    <div class="mode-card" onclick="startGame('path')">
+    <div class="mode-card" onclick="startGame('path', parseInt(document.getElementById('path-tiles').value))">
       <div class="icon">🐱</div>
       <h2>Path Puzzle</h2>
       <p>Clear tiles to carve a path. Guide the cat from bottom-right to the flag at top-left.</p>
+      <div class="tile-picker" onclick="event.stopPropagation()">
+        <label>Tile types:</label>
+        <input type="range" id="path-tiles" min="3" max="15" value="6">
+        <span class="tile-count" id="path-tiles-val">6</span>
+      </div>
       <div class="tags">
-        <span class="tag">6 tile types</span>
         <span class="tag">no gravity</span>
         <span class="tag">no regen</span>
         <span class="tag">WASD movement</span>
       </div>
     </div>
-    <div class="mode-card" onclick="startGame('chain')">
+    <div class="mode-card" onclick="startGame('chain', parseInt(document.getElementById('chain-tiles').value))">
       <div class="icon">💥</div>
       <h2>Chain Reaction</h2>
       <p>Match any 3 to wipe out ALL tiles of that type. Cleared tiles leave 💰 behind. Clear all colored tiles to win!</p>
+      <div class="tile-picker" onclick="event.stopPropagation()">
+        <label>Tile types:</label>
+        <input type="range" id="chain-tiles" min="3" max="15" value="15">
+        <span class="tile-count" id="chain-tiles-val">15</span>
+      </div>
       <div class="tags">
-        <span class="tag">15 tile types</span>
         <span class="tag">gravity</span>
         <span class="tag">no regen</span>
         <span class="tag">chain clear</span>
@@ -331,16 +355,7 @@
 const COLS = 20, ROWS = 20;
 const PLAYER = '🐱', GOAL_MARKER = '🏁';
 
-const PATH_ITEMS = [
-  { emoji: '🔴', name: 'Red' },
-  { emoji: '🔵', name: 'Blue' },
-  { emoji: '🟢', name: 'Green' },
-  { emoji: '🟡', name: 'Yellow' },
-  { emoji: '🟣', name: 'Purple' },
-  { emoji: '🟠', name: 'Orange' },
-];
-
-const CHAIN_ITEMS = [
+const ALL_ITEMS = [
   { emoji: '🔴', name: 'Red' },
   { emoji: '🔵', name: 'Blue' },
   { emoji: '🟢', name: 'Green' },
@@ -360,10 +375,18 @@ const CHAIN_ITEMS = [
 
 let game = null;
 
-function startGame(mode) {
+// wire up slider labels
+document.getElementById('path-tiles').addEventListener('input', e => {
+  document.getElementById('path-tiles-val').textContent = e.target.value;
+});
+document.getElementById('chain-tiles').addEventListener('input', e => {
+  document.getElementById('chain-tiles-val').textContent = e.target.value;
+});
+
+function startGame(mode, tileCount) {
   document.getElementById('menu').style.display = 'none';
   document.getElementById('game').style.display = 'flex';
-  game = new Match3(mode);
+  game = new Match3(mode, tileCount);
 }
 
 function backToMenu() {
@@ -373,9 +396,11 @@ function backToMenu() {
 }
 
 class Match3 {
-  constructor(mode) {
+  constructor(mode, tileCount) {
     this.mode = mode;
-    this.items = mode === 'chain' ? CHAIN_ITEMS : PATH_ITEMS;
+    const allItems = ALL_ITEMS;
+    const maxTiles = Math.min(Math.max(tileCount || (mode === 'chain' ? 15 : 6), 3), allItems.length);
+    this.items = allItems.slice(0, maxTiles);
     this.numTypes = this.items.length;
     this.boardEl = document.getElementById('board');
     this.scoreEl = document.getElementById('score');
